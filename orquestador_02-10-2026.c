@@ -5,8 +5,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-
 #include <sys/select.h>
+
+#include <time.h> 
 
 struct nodo {
     int sockCliente;
@@ -14,14 +15,13 @@ struct nodo {
 };
 
 struct candidato {
-    char llave[26];
+    char llave[27];
     float score;
 };
 
 char *analisisFrecuencias();
-char *generadorSemillas(char *semilla );
 void aceptarClientes(struct nodo **clientes, int *nClientes, int servidor);
-
+void generadorSemillas(struct candidato *llaves, char semilla[], int N, int inicio);
 
 int main(){
     int puerto = 67;
@@ -50,7 +50,36 @@ int main(){
     
     aceptarClientes(&clientes, &nClientes, servidor);
 
+
+    struct candidato llaves[nClientes * 200];
+    char semilla[27];
+    strcpy(semilla, analisisFrecuencias());
+    strcpy(llaves[0].llave, semilla);
+    generadorSemillas(llaves, semilla, 99, 1);
+
+    struct candidato ceamgu; //va a ser la variable que compara si ya le pegamos al gordo
+    ceamgu.score = 0; 
+
     return 0;
+}
+
+void generadorSemillas(struct candidato *llaves, char semilla[], int N, int inicio){
+    for(int i = inicio; i < N+inicio;){
+        srand(time(NULL));
+
+        int origen = rand() % 26;
+        int destino = rand() % 26;
+
+        if(origen != destino){
+            char llaveTMP[26];
+            strcpy(llaveTMP, semilla);
+            char letraTMP = llaveTMP[origen];
+            llaveTMP[origen] = llaveTMP[destino];
+            llaveTMP[destino] = letraTMP;
+            strcpy(llaves[i].llave, llaveTMP);
+            i++;
+        }
+    } //las llaves se pueden repetir pero elias me dijo q no me aguite 
 }
 
 void aceptarClientes(struct nodo **clientes, int *nClientes, int servidor){
