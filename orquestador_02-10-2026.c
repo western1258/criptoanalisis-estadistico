@@ -9,6 +9,8 @@
 
 #include <time.h> 
 
+#define ARCHIVO "trigram.json"
+
 struct nodo {
     int sockCliente;
     struct nodo* siguiente;
@@ -47,15 +49,16 @@ int main(){
         return 1;
     }
     printf("Escuchando en %i\n", puerto );
-    
-    aceptarClientes(&clientes, &nClientes, servidor);
+   
+    //funcion de nava la cual genera el .json
 
+    aceptarClientes(&clientes, &nClientes, servidor);
 
     struct candidato llaves[nClientes * 200];
     char semilla[27];
     strcpy(semilla, analisisFrecuencias());
     strcpy(llaves[0].llave, semilla);
-    generadorSemillas(llaves, semilla, 99, 1);
+    generadorSemillas(llaves, semilla, nClientes * 100 - 1, 1);
 
     struct candidato ceamgu; //va a ser la variable que compara si ya le pegamos al gordo
     ceamgu.score = 0; 
@@ -125,6 +128,31 @@ void aceptarClientes(struct nodo **clientes, int *nClientes, int servidor){
                 continue;
             }
 
+            FILE *archivo = fopen(ARCHIVO, "rb");
+            if (archivo == NULL){
+                printf("Error al enviar el archivo a fd %i", clienteTMP);
+                close(clienteTMP);
+                continue;
+            }else{
+                char buffer[4096];
+                size_t bLeidos;
+
+                while((bLeidos = fread(buffer, 1 , sizeof(buffer), archivo)) > 0){
+                    size_t enviados = 0;
+                    while(enviados < bLeidos){
+                        ssize_t resultado = send(clienteTMP, buffer + enviados, bLeidos - enviados, 0);
+                        
+                        if(resultado <= 0){
+                            printf("Error al enviar el archivo a fd %i", clienteTMP);
+                            close(clienteTMP);
+                            break;
+                        }
+                        enviados += resultado;
+                    }
+                }
+            }
+            fclose(archivo);
+
             nuevo->sockCliente = clienteTMP;
             nuevo->siguiente = NULL;
             if(temporal == NULL){
@@ -136,6 +164,7 @@ void aceptarClientes(struct nodo **clientes, int *nClientes, int servidor){
             }
 
             (*nClientes)++;
+            
         }
     }
 }
