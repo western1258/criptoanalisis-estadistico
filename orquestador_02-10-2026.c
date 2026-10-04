@@ -9,6 +9,9 @@
 
 #include <time.h> 
 
+#include  "TrigramaM.h"
+
+
 #define ARCHIVO "trigram.json"
 
 struct nodo {
@@ -54,6 +57,8 @@ int main(){
     }
     printf("Escuchando en %i\n", puerto );
    
+
+    trigrama_main("/home/kevmar/Documentos/5/Mat-Ciberseguridad/criptoanalisis-estadistico/corpus");
     //funcion de nava la cual genera el .json
 
     aceptarClientes(&clientes, &nClientes, servidor);
