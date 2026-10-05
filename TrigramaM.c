@@ -68,7 +68,7 @@ int trigrama_main(const char *ruta_corpus) {
  
         fprintf(json, "  \"%c%c%c\": %.6f",
         'A' + mi, 'A' + mj, 'A' + mk,
-        maximo * 100.0 / total);
+        maximo / total);
  
         conteo[mi][mj][mk] = 0;       /* ya se escribio: se tacha */
     }
