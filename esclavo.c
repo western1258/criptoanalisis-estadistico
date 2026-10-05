@@ -346,6 +346,8 @@ int main(int argc, char *argv[]) {
             printf("El Master cerro la conexion, terminamos\n");
             break;
         }
+        printf("Lote recibido: evaluando %d llaves...\n", LLAVES_POR_LOTE);
+        fflush(stdout);
 
         float mejor_score = -INFINITY;
         int mejor_posicion = 0;
@@ -358,6 +360,8 @@ int main(int argc, char *argv[]) {
         }
 
         float porcentaje = score_a_porcentaje(mejor_score);
+        printf("Lote evaluado: mejor score = %.2f\n", porcentaje);
+        fflush(stdout);
         if (enviar_resultado(sock, lote + mejor_posicion * LARGO_LLAVE, porcentaje) < 0) {
             printf("Error mandando el resultado\n");
             break;
