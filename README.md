@@ -1,246 +1,176 @@
-# 🔐 Criptoanálisis Estadístico Distribuido
+# Criptoanálisis estadístico distribuido
 
-![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![C](https://img.shields.io/badge/C-00599C?style=for-the-badge&logo=c&logoColor=white)
-![Sockets](https://img.shields.io/badge/Sockets-TCP%2FIP-black?style=for-the-badge)
-![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
-![Teoría de la Información](https://img.shields.io/badge/Teor%C3%ADa-Informaci%C3%B3n-4CAF50?style=for-the-badge)
+Proyecto en **C** para explorar el criptoanálisis de cifrados de sustitución monoalfabética mediante análisis de frecuencias y un modelo de trigramas del español. Un servidor genera claves candidatas y distribuye su evaluación entre clientes conectados por **TCP/IPv4**.
 
-Sistema distribuido de alto rendimiento para romper **cifrados de sustitución monoalfabética** de forma automatizada. Apoyándose en la teoría de la información, explota la redundancia estadística del idioma español (modelo de trigramas) para recuperar el texto claro **sin conocer la clave de cifrado**.
-
-La carga se reparte estratégicamente: un **Orquestador en Python** concentra la lógica de control y la búsqueda heurística (*Hill Climbing*), mientras que varios **Nodos de Evaluación en C** funcionan como motores de cálculo puro, evaluando cientos de miles de claves por segundo.
-
----
-
-## 📑 Contenido
-
-1. [Tecnologías y herramientas](#-tecnologías-y-herramientas)
-2. [Arquitectura del sistema](#️-arquitectura-del-sistema)
-3. [Fundamento matemático](#-fundamento-matemático)
-4. [Algoritmo de búsqueda (Hill Climbing)](#-algoritmo-de-búsqueda-hill-climbing)
-5. [Flujo del nodo cliente en C](#-flujo-del-nodo-cliente-en-c)
-6. [Protocolo de comunicación](#-protocolo-de-comunicación-propuesta)
-7. [Estructura del repositorio](#-estructura-del-repositorio-propuesta)
-8. [Instalación y uso](#-instalación-y-uso)
-9. [Pruebas experimentales](#-pruebas-experimentales)
-10. [Consideraciones de diseño](#-consideraciones-de-diseño)
-
----
-
-## 🧰 Tecnologías y herramientas
-
-| Componente | Tecnología | Uso en el proyecto |
-|---|---|---|
-| Orquestador (Master) | **Python 3.x** | Normalización del corpus, modelo de trigramas, Hill Climbing, servidor de sockets |
-| Nodos de evaluación | **C (C99/C11)** | Descifrado con LUT y cálculo del score a máxima velocidad |
-| Compilador | **GCC / Clang** (`-O3 -lm`) | Optimización y enlace de la librería matemática |
-| Comunicación | **Sockets TCP/IP (POSIX)** | Envío de lotes de claves y recepción de resultados |
-| Intercambio del modelo | **JSON** o volcado binario | Transporte de las 17,576 probabilidades de trigramas |
-| Librerías Python | `socket`, `threading`/`selectors`, `json`, `math`, `collections`, `random`, `unicodedata` | Red, concurrencia, estadística y normalización |
-| Gráficas y reporte | `matplotlib`, `pandas` *(opcional)* | Longitud vs. exactitud, tiempo, reinicios, etc. |
-| Sistema operativo | **Linux/Unix** (recomendado) | Sockets POSIX nativos |
-| Datos | **Corpus en español** (texto plano) | Entrenamiento del modelo estadístico |
-
----
-
-## ⚙️ Arquitectura del sistema
-
-Modelo **maestro/esclavo** con procesamiento por lotes (*chunking*) para maximizar el uso de CPU y minimizar la latencia de red.
-
-```mermaid
-flowchart TD
-    subgraph PC1["🖥️ PC Servidor — Master (.py)"]
-        M["Socket Server [Python]"]
-        AF["Análisis de frecuencias<br/>(Corpus + Cifrado)"]
-        MOD["Modelo de trigramas → Probabilidades → .json"]
-        HC["Hill Climbing<br/>(clave actual, vecinos, reinicios)"]
-        M --> AF --> MOD
-        M --> HC
-    end
-
-    subgraph PC2["🖥️ PCs Esclavas — Nodos de Evaluación"]
-        C1["Socket Cliente [C] #1"]
-        C2["Socket Cliente [C] #2"]
-        C3["Socket Cliente [C] #3"]
-    end
-
-    MOD -->|"modelo (una sola vez)"| C1
-    MOD -->|"modelo (una sola vez)"| C2
-    MOD -->|"modelo (una sola vez)"| C3
-    HC -->|"lote de llaves vecinas"| C1
-    HC -->|"lote de llaves vecinas"| C2
-    HC -->|"lote de llaves vecinas"| C3
-
-    C1 -->|"mejor llave + score"| HC
-    C2 -->|"mejor llave + score"| HC
-    C3 -->|"mejor llave + score"| HC
-
-    HC --> D{"¿Mejora? S_nueva > S_actual"}
-    D -->|Sí| U["Actualiza clave actual"]
-    D -->|No: máximo local| R["Reinicio con clave aleatoria"]
-    U --> HC
-    R --> HC
-    HC -->|"≥ 95% de exactitud"| OK["✅ Clave recuperada"]
-```
-
-### 🐍 Orquestador / Master (Python)
-- **Normalización del corpus:** mayúsculas A–Z, sin espacios, acentos ni puntuación.
-- **Generador del modelo:** extrae frecuencias de trigramas y calcula sus probabilidades.
-- **Hill Climbing:** mantiene el *estado* de la búsqueda, genera claves aleatorias iniciales y lotes de **claves vecinas** (intercambio de exactamente 2 posiciones de la permutación del alfabeto).
-- **Despacho distribuido:** servidor de sockets TCP que envía lotes masivos de claves.
-- **Evaluación global:** recibe la mejor clave de cada cliente, compara scores y decide si **actualiza** la clave actual o **reinicia** al detectar un máximo local.
-
-### ⚡ Nodos de Evaluación / Esclavos (C)
-- **Motores "tontos" pero muy rápidos:** no deciden cuándo termina el ataque; solo puntúan lotes y devuelven el máximo local del lote.
-- **Precarga en RAM:** texto cifrado y modelo de trigramas en memoria antes de evaluar (cero I/O en el bucle).
-- **Descifrado O(1) por carácter** mediante Tabla de Búsqueda (LUT) ASCII de 256 posiciones.
-- **Restricciones de rendimiento:** sin `malloc` dentro de los ciclos de evaluación, mínimas sentencias `if` (mejor *branch prediction*) y logaritmos **precalculados** en la inicialización.
-
----
-
-## 🧮 Fundamento matemático
-
-El criptoanálisis no busca palabras en un diccionario: cuantifica qué tan compatible es el texto candidato con la estructura estadística del idioma.
-
-1. **Redundancia y trigramas.** El lenguaje natural es redundante: las letras previas reducen la incertidumbre de las siguientes. Se modela con ventanas deslizantes de tres letras.
-2. **Función de puntuación.** Para evitar *underflow* al multiplicar probabilidades diminutas, se suma la cantidad de información (logaritmos base 2):
-
-$$S(T) = \sum_{i=1}^{N-2} \log_2 P(t_i\, t_{i+1}\, t_{i+2})$$
-
-3. **Suavizado.** Si un trigrama no existe en el corpus, se evita $\log_2(0)$ asignando una probabilidad mínima:
-
-$$P_{min} = \frac{1}{10B}$$
-
-   donde $B$ es el total de trigramas del corpus.
-
-4. **Espacio del modelo.** Arreglo estático de $26^3 = 17{,}576$ elementos (`float`/`double`) con el $\log_2 P$ de cada combinación de `AAA` a `ZZZ`.
-
----
-
-## 🧗 Algoritmo de búsqueda (Hill Climbing)
+## Estructura del repositorio
 
 ```text
-1. clave_actual ← permutación aleatoria del alfabeto
-2. score_actual ← S(descifrar(cifrado, clave_actual))
-3. Repetir:
-     a. Generar lote de vecinos (swap de 2 posiciones) y repartirlo entre los nodos
-     b. Cada nodo devuelve (mejor_clave_del_lote, mejor_score_del_lote)
-     c. mejor ← máximo entre las respuestas de todos los nodos
-     d. Si mejor.score > score_actual → clave_actual ← mejor.clave        (ascenso)
-        Si no                         → máximo local → REINICIO (paso 1)
-4. Terminar al alcanzar el criterio de éxito o un límite de reinicios/iteraciones
-```
-
----
-
-## 🔧 Flujo del nodo cliente en C
-
-**Fase 1 — Inicialización (una sola vez)**
-1. Cargar el texto cifrado normalizado en un buffer en RAM.
-2. Recibir el modelo de trigramas desde Python (`.json` o volcado binario de 17,576 probabilidades).
-3. Precalcular logaritmos: si `P = 0` aplicar `P_min`; guardar `log2(P)` en `arreglo_prob_log[17576]`.
-4. Conectar el socket al Master.
-
-**Fase 2 — Bucle de trabajo (CPU bound)**
-1. **Recibir lote** con $N$ claves vecinas.
-2. Para cada clave `k`:
-   - Construir la **LUT ASCII** (256 posiciones) con la clave de 26 caracteres.
-   - **Descifrar** el texto con la LUT en un buffer temporal preasignado.
-   - **Puntuar** con ventana deslizante de 3 en 3:
-     ```c
-     idx = (c1 - 'A') * 676 + (c2 - 'A') * 26 + (c3 - 'A');
-     score_actual += arreglo_prob_log[idx];
-     ```
-   - **Filtrar:** conservar solo la clave con el score más alto del lote.
-3. **Retornar** la mejor clave y su score al Master y repetir.
-
----
-
-## 📡 Protocolo de comunicación (propuesta)
-
-| Sentido | Mensaje | Contenido |
-|---|---|---|
-| Master → Cliente | `MODEL` | 17,576 probabilidades (JSON o binario) |
-| Master → Cliente | `CIPHER` | Texto cifrado normalizado |
-| Master → Cliente | `BATCH` | $N$ claves de 26 caracteres |
-| Cliente → Master | `RESULT` | Mejor clave del lote + score |
-| Master → Cliente | `STOP` | Fin del ataque |
-
-> Se recomienda un encabezado de longitud fija (tipo + tamaño) para delimitar mensajes sobre TCP.
-
----
-
-## 📁 Estructura del repositorio (propuesta)
-
-```text
-.
-├── master/
-│   ├── master.py          # Servidor de sockets + Hill Climbing
-│   ├── modelo.py          # Normalización del corpus y modelo de trigramas
-│   └── experimentos.py    # Ejecución de pruebas y métricas
-├── esclavo/
-│   └── esclavo.c          # Nodo de evaluación
-├── data/
-│   ├── corpus_es.txt      # Corpus de entrenamiento
-│   ├── modelo.json        # Probabilidades de trigramas (generado)
-│   └── criptogramas/      # Textos cifrados (N = 25, 50, 100, 200, 500)
-├── resultados/            # CSV y gráficas
+criptoanalisis-estadistico/
+├── AnalisisFrec.c
+├── AnalisisFrec.h
+├── Cliente.c
+├── Servidor.c
+├── TrigramaM.c
+├── TrigramaM.h
+├── CORPUS/
+│   ├── doñaPerfecta.txt
+│   ├── doñaPerfecta.txt:Zone.Identifier
+│   ├── laFamiliaDeLeonRoch.txt
+│   ├── laFamiliaDeLeonRoch.txt:Zone.Identifier
+│   ├── loProhibido.txt
+│   └── loProhibido.txt:Zone.Identifier
+├── marianela(CIFRAR).txt
+├── marianelaCIFRADO.txt
 └── README.md
 ```
 
----
+| Archivo o directorio | Función |
+|---|---|
+| `Servidor.c` | Escucha conexiones, prepara el modelo, genera lotes de claves, recibe resultados y conserva la mejor clave encontrada. |
+| `Cliente.c` | Carga el cifrado local, recibe el modelo, evalúa las claves y devuelve la mejor de cada lote con su puntuación. |
+| `AnalisisFrec.c` | Cuenta las letras del cifrado, genera una semilla ordenada por frecuencia y construye `corpus.txt`. |
+| `AnalisisFrec.h` | Declara la función `analisisFrecuencias`. |
+| `TrigramaM.c` | Calcula las probabilidades de trigramas del corpus y escribe `trigram.json`. |
+| `TrigramaM.h` | Declara la función `trigrama_main`. |
+| `CORPUS/` | Contiene los textos de referencia para construir el modelo del español. |
+| `marianela(CIFRAR).txt` | Texto de referencia para el cifrado. |
+| `marianelaCIFRADO.txt` | Archivo cifrado que el servidor usa para calcular la semilla inicial. |
+| `*:Zone.Identifier` | Archivos auxiliares de metadatos de descarga de Windows. |
 
-## 🚀 Instalación y uso
+El servidor procesa **todos los archivos regulares** directamente dentro de `CORPUS/`, incluidos los archivos `Zone.Identifier`. Conviene retirar esos metadatos de la carpeta usada para entrenar el modelo.
 
-### Prerrequisitos
-- Python 3.x
-- GCC o Clang
-- Linux/Unix (recomendado, sockets POSIX)
-- Red local entre el Master y los nodos (mismo puerto abierto)
+### Archivos generados
 
-### 1. Compilar el nodo esclavo (C)
-Se enlaza la librería matemática (`-lm`) por el uso de `log2`.
-```bash
-gcc esclavo/esclavo.c -o esclavo -lm -O3
+Al ejecutar el servidor se crean en el directorio de trabajo:
+
+- `corpus.txt`: textos del corpus concatenados y normalizados a letras A–Z.
+- `trigram.json`: probabilidades de los trigramas observados.
+
+Los ejecutables `servidor` y `cliente` se crean al compilar.
+
+## Funcionamiento
+
+1. El servidor cuenta las frecuencias de las letras de `marianelaCIFRADO.txt` y obtiene una semilla de 26 letras.
+2. Normaliza los textos de `CORPUS/`: convierte minúsculas a mayúsculas, vocales acentuadas a su equivalente ASCII, Ü a U y Ñ a N; descarta los demás caracteres.
+3. Genera el modelo de trigramas y acepta clientes.
+4. Cada cliente recibe el modelo y confirma su recepción.
+5. Al presionar **Enter en la terminal del servidor**, termina la fase de aceptación y comienza la distribución de trabajo.
+6. El servidor envía lotes de **100 claves**, cada una de 26 letras.
+7. Los clientes aplican cada clave al cifrado y puntúan el texto resultante.
+8. Cada cliente devuelve la mejor clave de su lote y su puntuación. El servidor actualiza la mejor solución cuando recibe una mejora y continúa enviando trabajo.
+
+Las claves vecinas se generan intercambiando dos posiciones de la semilla. La implementación actual no incorpora reinicios aleatorios al quedar atrapada en un máximo local.
+
+## Modelo estadístico
+
+El cliente usa una tabla de **26³ = 17 576** combinaciones posibles de tres letras. Para un texto candidato de longitud N, calcula:
+
+```text
+score = suma de log2(P(trigrama_i)), para i = 0 ... N - 3
 ```
 
-### 2. Generar el modelo de trigramas (Python)
+Una puntuación mayor indica mayor compatibilidad con el modelo. Los logaritmos se precalculan al cargarlo y los trigramas ausentes reciben una probabilidad mínima para evitar `log2(0)`.
+
+El cliente transforma la suma en una puntuación porcentual usando referencias basadas en la entropía del modelo y la probabilidad mínima. **Ese valor no representa el porcentaje de caracteres correctamente descifrados.**
+
+## Requisitos
+
+- Linux con sockets POSIX.
+- GCC compatible con C11.
+- Git para clonar el repositorio.
+- Biblioteca matemática estándar, enlazada con `-lm` al compilar el cliente.
+- Conectividad TCP al puerto **6767** si los clientes se ejecutan en otras máquinas.
+
+## Compilación
+
 ```bash
-python3 master/modelo.py --corpus data/corpus_es.txt --salida data/modelo.json
+git clone https://github.com/western1258/criptoanalisis-estadistico.git
+cd criptoanalisis-estadistico
+
+gcc -std=c11 -O3 Servidor.c AnalisisFrec.c TrigramaM.c -o servidor
+gcc -std=c11 -O3 Cliente.c -o cliente -lm
 ```
 
-### 3. Iniciar el Master
+`AnalisisFrec.c` y `TrigramaM.c` son módulos del servidor; no tienen un programa principal independiente.
+
+## Ejecución
+
+Ejecuta los programas desde la raíz del repositorio para que las rutas relativas se resuelvan correctamente.
+
+### 1. Preparar el cifrado
+
+El cliente admite entre **3 y 100 000 letras ASCII**. Si el archivo supera ese límite, termina antes de conectarse. Para probar con un fragmento del archivo incluido:
+
 ```bash
-python3 master/master.py --cifrado data/criptogramas/cifrado_100.txt --puerto 5000 --nodos 3
+LC_ALL=C tr -cd 'A-Za-z' < marianelaCIFRADO.txt | head -c 10000 > cifrado_prueba.txt
 ```
 
-### 4. Conectar los nodos esclavos (en cada PC)
-```bash
-./esclavo <IP_DEL_MASTER> 5000
+Para que el servidor obtenga la semilla a partir de ese mismo fragmento, cambia en `Servidor.c`:
+
+```c
+strcpy(semilla, analisisFrecuencias("cifrado_prueba.txt", "CORPUS"));
 ```
 
-> Los nombres de archivos y parámetros son orientativos; ajústalos a tu implementación.
+Después vuelve a compilar el servidor. El nombre del cifrado, la carpeta del corpus y el puerto están definidos en el código del servidor.
 
----
+### 2. Iniciar el servidor
 
-## 📊 Pruebas experimentales
+En una terminal:
 
-- **Longitudes de criptograma:** $N = 25, 50, 100, 200, 500$.
-- **Métricas por prueba:** iteraciones, reinicios (*restarts*), tiempo de ejecución, score obtenido y porcentaje de exactitud de caracteres descifrados.
-- **Criterio de éxito:** recuperar correctamente **al menos el 95 %** del mensaje original.
-- **Gráficas sugeridas:** Longitud vs. Exactitud, Longitud vs. Tiempo, Longitud vs. Reinicios, y escalabilidad (1, 2 y 3 nodos).
+```bash
+./servidor
+```
 
----
+Espera a que procese el corpus y muestre el mensaje para aceptar clientes.
 
-## 📝 Consideraciones de diseño
+### 3. Conectar uno o varios clientes
 
-- **El 95 % es un criterio de éxito, no un umbral de score.** La exactitud se mide comparando contra el texto claro conocido durante las pruebas; los nodos nunca lo evalúan. La decisión de terminar o reiniciar es siempre del Master.
-- **Los nodos solo devuelven el máximo local de su lote**, lo que reduce el tráfico de red y mantiene la lógica heurística centralizada.
-- **Textos cortos (N = 25–50)** tienen poca redundancia estadística; se espera menor exactitud y más reinicios.
-- **Rendimiento:** el cuello de botella debe ser CPU, no red; por eso se envían lotes grandes y se precalcula todo lo posible.
+En otra terminal, para una prueba local:
 
----
+```bash
+./cliente 127.0.0.1 6767 cifrado_prueba.txt
+```
 
-## 🎓 Contexto académico
+Para un cliente en otra máquina:
 
-Proyecto desarrollado a partir del material de la Sesión 06 — *Criptoanálisis estadístico*, aplicando conceptos de teoría de la información (redundancia, entropía y cantidad de información).
+```bash
+./cliente <IP_DEL_SERVIDOR> 6767 cifrado_prueba.txt
+```
+
+Cada cliente debe tener una copia del **mismo texto cifrado**. El servidor transmite el modelo y las claves; el cifrado se carga desde un archivo local en cada cliente.
+
+La sintaxis del cliente es:
+
+```text
+./cliente [IP] [PUERTO] [ARCHIVO_CIFRADO]
+```
+
+Si se omiten argumentos, usa `127.0.0.1`, puerto `67` y archivo `cifrado.txt`. Como el servidor escucha en `6767`, usa los argumentos explícitos de los ejemplos.
+
+### 4. Comenzar la evaluación
+
+Con los clientes conectados y el modelo recibido, presiona **Enter en la terminal del servidor**. Las terminales mostrarán los lotes, las claves candidatas y las mejoras de puntuación.
+
+Para detener una prueba manualmente, usa **Ctrl+C**. El código actual no establece un límite de tiempo ni de iteraciones.
+
+## Protocolo de comunicación implementado
+
+| Dirección | Contenido | Delimitación |
+|---|---|---|
+| Servidor → Cliente | Modelo de trigramas en JSON | Termina con un byte nulo. |
+| Cliente → Servidor | Confirmación de recepción del modelo | Un byte. |
+| Servidor → Cliente | 100 claves concatenadas de 26 letras | 2600 bytes más un byte nulo: 2601 bytes en total. |
+| Cliente → Servidor | Mejor clave y puntuación porcentual | 26 caracteres de clave seguidos del valor formateado con `%05.2f`. |
+
+No se implementan etiquetas de mensaje como `MODEL`, `BATCH` o `STOP`. El servidor usa `select()` para atender las respuestas de varios clientes.
+
+## Limitaciones actuales
+
+- El cliente limita las puntuaciones a **99.99**, mientras que el servidor busca alcanzar **100**. Por ello, esa condición de éxito no se alcanza con el cliente actual; la búsqueda continúa mientras haya clientes activos y no ocurra un error.
+- La respuesta de clave y puntuación se lee con una sola llamada a `recv()` en el servidor. TCP puede fragmentarla y el servidor no reconstruye el mensaje completo antes de interpretarlo.
+- No hay reinicios de búsqueda ni límites de iteraciones o tiempo.
+- La salida muestra claves y puntuaciones; no guarda automáticamente el texto descifrado en un archivo.
+- El cliente conserva únicamente letras ASCII A–Z del cifrado y descarta espacios, puntuación y caracteres acentuados.
+- El modelo depende del corpus elegido y no garantiza recuperar la clave correcta.
+- El repositorio no contiene una suite de pruebas ni resultados medidos de exactitud o rendimiento.
+
