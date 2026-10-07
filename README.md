@@ -133,7 +133,7 @@ git clone https://github.com/western1258/criptoanalisis-estadistico.git
 cd criptoanalisis-estadistico
 
 gcc -std=c11 -O3 Servidor.c AnalisisFrec.c TrigramaM.c -o servidor
-gcc -std=c11 -O3 Cliente.c -o cliente -lm
+gcc Cliente.c -o cliente -Wall -Wextra -lm
 ```
 
 `AnalisisFrec.c` y `TrigramaM.c` son módulos del servidor; no tienen un programa principal independiente.
