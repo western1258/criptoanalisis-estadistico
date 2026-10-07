@@ -9,8 +9,8 @@
 
 #include <time.h> 
 
-#include  "AnalisisFrec.h"
 #include  "TrigramaM.h"
+#include  "AnalisisFrec.h"
 
 #define ARCHIVO "trigram.json"
 
@@ -75,7 +75,7 @@ int main(){
 
     struct candidato llaves[nClientes * 100];
     char semilla[27];
-    strcpy(semilla, analisisFrecuencias("texto_cifrado.txt","rutaDirectorioCorpus"));
+    strcpy(semilla, analisisFrecuencias("marianelaCIFRADO.txt","CORPUS"));
     strcpy(llaves[0].llave, semilla);
     printf("Semilla Base: %s\n", semilla);
     generadorSemillas(llaves, semilla, nClientes * 100, 1);
