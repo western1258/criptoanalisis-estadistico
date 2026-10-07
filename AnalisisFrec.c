@@ -4,7 +4,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
-#include "analisisFrecuencias.h"
+#include "AnalisisFrec.h"
 
 #define TAM 26
 
