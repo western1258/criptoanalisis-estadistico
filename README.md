@@ -215,11 +215,8 @@ No se implementan etiquetas de mensaje como `MODEL`, `BATCH` o `STOP`. El servid
 
 ## 📝 Limitaciones actuales
 
-- El cliente limita las puntuaciones a **99.99**, mientras que el servidor busca alcanzar **100**. Por ello, esa condición de éxito no se alcanza con el cliente actual; la búsqueda continúa mientras haya clientes activos y no ocurra un error.
-- La respuesta de clave y puntuación se lee con una sola llamada a `recv()` en el servidor. TCP puede fragmentarla y el servidor no reconstruye el mensaje completo antes de interpretarlo.
 - No hay reinicios de búsqueda ni límites de iteraciones o tiempo.
 - La salida muestra claves y puntuaciones; no guarda automáticamente el texto descifrado en un archivo.
 - El cliente conserva únicamente letras ASCII A–Z del cifrado y descarta espacios, puntuación y caracteres acentuados.
 - El modelo depende del corpus elegido y no garantiza recuperar la clave correcta.
-- El repositorio no contiene una suite de pruebas ni resultados medidos de exactitud o rendimiento.
 
