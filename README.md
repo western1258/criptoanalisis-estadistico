@@ -55,9 +55,6 @@ criptoanalisis-estadistico/
 | `CORPUS/` | Contiene los textos de referencia para construir el modelo del español. |
 | `marianela(CIFRAR).txt` | Texto de referencia para el cifrado. |
 | `marianelaCIFRADO.txt` | Archivo cifrado que el servidor usa para calcular la semilla inicial. |
-| `*:Zone.Identifier` | Archivos auxiliares de metadatos de descarga de Windows. |
-
-El servidor procesa **todos los archivos regulares** directamente dentro de `CORPUS/`, incluidos los archivos `Zone.Identifier`. Conviene retirar esos metadatos de la carpeta usada para entrenar el modelo.
 
 ### Archivos generados
 
