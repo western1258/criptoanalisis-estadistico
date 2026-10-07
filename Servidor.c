@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <sys/select.h>
 
-#include <time.h> 
+#include <time.h>
 
 #include  "TrigramaM.h"
 #include  "AnalisisFrec.h"
@@ -30,15 +30,15 @@ void generadorSemillas(struct candidato *llaves, char semilla[], int N, int inic
 void formatoSemillas(struct candidato *llaves, char cadena[], int n, int inicio);
 
 int main(){
-    int puerto = 6767; 
+    int puerto = 6767;
     struct nodo *clientes = NULL;
     int nClientes = 0;
 
-    srand(time(NULL)); 
+    srand(time(NULL));
 
     int servidor = socket(AF_INET, SOCK_STREAM, 0);
-    if(servidor < 0){ 
-        printf("Error crendo el socket\n"); 
+    if(servidor < 0){
+        printf("Error crendo el socket\n");
         return 1 ;
     }
 
@@ -49,7 +49,7 @@ int main(){
     memset(&direccion, 0, sizeof(direccion));
     direccion.sin_family = AF_INET;
     direccion.sin_addr.s_addr = INADDR_ANY;
-    direccion.sin_port = htons(puerto); 
+    direccion.sin_port = htons(puerto);
     if(bind(servidor, (struct sockaddr *)&direccion, sizeof(direccion)) < 0){
         printf("Error haciendo el bind\n");
         return 1;
@@ -60,10 +60,11 @@ int main(){
         return 1;
     }
     printf("Escuchando en %i\n", puerto );
-   
 
-    trigrama_main("corpus");
-    //funcion de nava para el yeison
+
+    char semilla[27];
+    strcpy(semilla, analisisFrecuencias("marianelaCIFRADO.txt","CORPUS"));
+    trigrama_main("corpus.txt");
 
     aceptarClientes(&clientes, &nClientes, servidor);
 
@@ -74,31 +75,29 @@ int main(){
     }
 
     struct candidato llaves[nClientes * 100];
-    char semilla[27];
-    strcpy(semilla, analisisFrecuencias("marianelaCIFRADO.txt","CORPUS"));
     strcpy(llaves[0].llave, semilla);
     printf("Semilla Base: %s\n", semilla);
     generadorSemillas(llaves, semilla, nClientes * 100, 1);
 
     struct candidato ceamgu; //va a ser la variable que compara si ya le pegamos al gordo
-    ceamgu.score = 0; 
+    ceamgu.score = 0;
     ceamgu.llave[0] = '\0';
-        
+
     fd_set socketsClientes;
     int maxFD = 0;
-    int activos = nClientes; 
+    int activos = nClientes;
     FD_ZERO(&socketsClientes);
 
     struct nodo *ptrTMP = clientes;
     char lote[2601];
     int indice = 0;
     for(int i = 0; i < nClientes; i++){
-        
+
         formatoSemillas(llaves, lote, 99, indice);
         printf("Lote [%i-%i] -> fd %i | primera llave: %.26s\n", indice, indice + 99, ptrTMP->sockCliente, lote);
-        indice += 100; 
+        indice += 100;
         generadorSemillas(llaves, semilla, indice, indice - 100);
-        if(indice >= nClientes * 100) indice = 0; 
+        if(indice >= nClientes * 100) indice = 0;
 
         size_t bLeidos = sizeof(lote);
         size_t enviados = 0;
@@ -118,41 +117,41 @@ int main(){
 
         if(!falloEnvio){
             FD_SET(ptrTMP->sockCliente, &socketsClientes);
-            if(ptrTMP->sockCliente > maxFD) maxFD = ptrTMP->sockCliente; 
+            if(ptrTMP->sockCliente > maxFD) maxFD = ptrTMP->sockCliente;
         }
         ptrTMP = ptrTMP->siguiente;
     }
-    
-    indice = 0;
-    while(ceamgu.score < 100 && activos > 0){ 
 
-        fd_set lectura = socketsClientes; 
+    indice = 0;
+    while(ceamgu.score < 100 && activos > 0){
+
+        fd_set lectura = socketsClientes;
         int listos = select(maxFD + 1, &lectura, NULL, NULL, NULL);
         if(listos < 0){
             printf("Error en el select\n");
             break;
         }
 
-        ptrTMP = clientes; 
+        ptrTMP = clientes;
         for(int i = 0; i < nClientes; i++){
-            char buffer_recibo[36]; 
-            char llave[27]; 
-            char scoreTMP[6];       
+            char buffer_recibo[36];
+            char llave[27];
+            char scoreTMP[6];
             float scoreFloat = 0.0f;
 
             if(ptrTMP->sockCliente != -1 && FD_ISSET(ptrTMP->sockCliente, &lectura)){
-                ssize_t recibidos = recv(ptrTMP->sockCliente, buffer_recibo, sizeof(buffer_recibo) - 1, 0); 
+                ssize_t recibidos = recv(ptrTMP->sockCliente, buffer_recibo, sizeof(buffer_recibo) - 1, 0);
                 if (recibidos > 0) {
-                    buffer_recibo[recibidos] = '\0'; 
+                    buffer_recibo[recibidos] = '\0';
 
                     if (recibidos >= 26) { //solo se toma en cuenta si llego la llave completa
                         strncpy(llave, buffer_recibo, 26);
-                        llave[26] = '\0'; 
+                        llave[26] = '\0';
 
                         if (recibidos > 26) {
                             strncpy(scoreTMP, &buffer_recibo[26], sizeof(scoreTMP) - 1);
-                            scoreTMP[sizeof(scoreTMP) - 1] = '\0'; 
-                            scoreFloat = strtof(scoreTMP, NULL); 
+                            scoreTMP[sizeof(scoreTMP) - 1] = '\0';
+                            scoreFloat = strtof(scoreTMP, NULL);
                         }
 
                         printf("fd %i respondio -> llave: %s | score: %.2f\n", ptrTMP->sockCliente, llave, scoreFloat);
@@ -167,7 +166,7 @@ int main(){
                         printf("fd %i mando una respuesta incompleta (%zd bytes), se ignora\n", ptrTMP->sockCliente, recibidos);
                     }
 
-                    if(scoreFloat < 95){
+                    if(scoreFloat < 100){
                         formatoSemillas(llaves, lote, 99, indice);
                         printf("Lote [%i-%i] -> fd %i | primera llave: %.26s\n", indice, indice + 99, ptrTMP->sockCliente, lote);
 
@@ -185,9 +184,9 @@ int main(){
                          }
 
                         if(!falloEnvio){
-                            indice += 100; 
+                            indice += 100;
                             generadorSemillas(llaves, semilla, indice, indice - 100);
-                            if(indice >= nClientes * 100) indice = 0; 
+                            if(indice >= nClientes * 100) indice = 0;
                         }else{
                             //si no se le pudo mandar, matamos al ciente y lo sacamos del set
                             FD_CLR(ptrTMP->sockCliente, &socketsClientes);
@@ -204,14 +203,14 @@ int main(){
                     activos--;
                 }
             }
-            ptrTMP = ptrTMP->siguiente; 
-        }       
+            ptrTMP = ptrTMP->siguiente;
+        }
 
     }
 
     printf("Semilla obtenida: %s | score : %f\n", ceamgu.llave, ceamgu.score);
 
-    
+
     ptrTMP = clientes;
     while(ptrTMP != NULL){
         struct nodo *siguiente = ptrTMP->siguiente;
@@ -227,19 +226,19 @@ int main(){
 void formatoSemillas(struct candidato *llaves, char cadena[], int n, int inicio){
     cadena[0] = '\0';
     for(int i = inicio; i < n + inicio + 1; i++){
-       strcat(cadena, llaves[i].llave); 
+       strcat(cadena, llaves[i].llave);
     }
 }
 
 void generadorSemillas(struct candidato *llaves, char semilla[], int N, int inicio){
     int intentos = 0;
     for(int i = N - 1; i >= inicio;){
- 
+
         int origen = rand() % 26;
         int destino = rand() % 26;
 
         if(origen != destino){
-            char llaveTMP[27]; 
+            char llaveTMP[27];
             strcpy(llaveTMP, semilla);
             char letraTMP = llaveTMP[origen];
             llaveTMP[origen] = llaveTMP[destino];
@@ -312,10 +311,10 @@ void aceptarClientes(struct nodo **clientes, int *nClientes, int servidor){
                     size_t enviados = 0;
                     while(enviados < bLeidos){
                         ssize_t resultado = send(clienteTMP, buffer + enviados, bLeidos - enviados, MSG_NOSIGNAL);
-                        
+
                         if(resultado <= 0){
                             printf("Error al enviar el archivo a fd %i\n", clienteTMP);
-                            falloEnvio = 1; 
+                            falloEnvio = 1;
                             break;
                         }
                         enviados += resultado;
@@ -325,7 +324,7 @@ void aceptarClientes(struct nodo **clientes, int *nClientes, int servidor){
 
                 if(falloEnvio){
                     close(clienteTMP);
-                    continue; 
+                    continue;
                 }
 
                 if(send(clienteTMP, "\0", 1, MSG_NOSIGNAL) <= 0){
@@ -361,11 +360,7 @@ void aceptarClientes(struct nodo **clientes, int *nClientes, int servidor){
             }
 
             (*nClientes)++;
-            
+
         }
     }
-}
-
-char *analisisFrecuencias(){
-    return "eaosinrdlctupmbgfvyhqjzxkw";
 }
