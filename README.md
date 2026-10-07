@@ -1,8 +1,28 @@
-# Criptoanálisis estadístico distribuido
+# 🔐 Criptoanálisis estadístico distribuido
+
+![C](https://img.shields.io/badge/Lenguaje-C-00599C?style=for-the-badge&logo=c&logoColor=white)
+![Linux](https://img.shields.io/badge/Plataforma-Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
+![TCP](https://img.shields.io/badge/Red-TCP%2FIPv4-334155?style=for-the-badge)
+![Modelo](https://img.shields.io/badge/Modelo-Trigramas-15803D?style=for-the-badge)
 
 Proyecto en **C** para explorar el criptoanálisis de cifrados de sustitución monoalfabética mediante análisis de frecuencias y un modelo de trigramas del español. Un servidor genera claves candidatas y distribuye su evaluación entre clientes conectados por **TCP/IPv4**.
 
-## Estructura del repositorio
+## 📑 Contenido
+
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Funcionamiento](#funcionamiento)
+- [Modelo estadístico](#modelo-estadístico)
+- [Requisitos](#requisitos)
+- [Compilación](#compilación)
+- [Ejecución](#ejecución)
+- [Protocolo de comunicación implementado](#protocolo-de-comunicación-implementado)
+- [Limitaciones actuales](#limitaciones-actuales)
+
+---
+
+<a id="estructura-del-repositorio"></a>
+
+## 📁 Estructura del repositorio
 
 ```text
 criptoanalisis-estadistico/
@@ -48,7 +68,23 @@ Al ejecutar el servidor se crean en el directorio de trabajo:
 
 Los ejecutables `servidor` y `cliente` se crean al compilar.
 
-## Funcionamiento
+<a id="funcionamiento"></a>
+
+## ⚙️ Funcionamiento
+
+```mermaid
+flowchart LR
+    C["CORPUS/<br/>Textos en español"] --> AF["AnalisisFrec.c<br/>Normalización y frecuencias"]
+    T["Texto cifrado"] --> AF
+    AF --> N["corpus.txt"]
+    N --> M["TrigramaM.c"]
+    M --> J["trigram.json"]
+    AF --> S["Servidor.c<br/>Semilla y claves candidatas"]
+    J --> S
+    S -->|"Modelo y lotes de 100 claves"| CL["Cliente.c<br/>Uno o varios clientes"]
+    T -->|"Copia local"| CL
+    CL -->|"Mejor clave y puntuación"| S
+```
 
 1. El servidor cuenta las frecuencias de las letras de `marianelaCIFRADO.txt` y obtiene una semilla de 26 letras.
 2. Normaliza los textos de `CORPUS/`: convierte minúsculas a mayúsculas, vocales acentuadas a su equivalente ASCII, Ü a U y Ñ a N; descarta los demás caracteres.
@@ -61,7 +97,9 @@ Los ejecutables `servidor` y `cliente` se crean al compilar.
 
 Las claves vecinas se generan intercambiando dos posiciones de la semilla. La implementación actual no incorpora reinicios aleatorios al quedar atrapada en un máximo local.
 
-## Modelo estadístico
+<a id="modelo-estadístico"></a>
+
+## 📊 Modelo estadístico
 
 El cliente usa una tabla de **26³ = 17 576** combinaciones posibles de tres letras. Para un texto candidato de longitud N, calcula:
 
@@ -71,9 +109,14 @@ score = suma de log2(P(trigrama_i)), para i = 0 ... N - 3
 
 Una puntuación mayor indica mayor compatibilidad con el modelo. Los logaritmos se precalculan al cargarlo y los trigramas ausentes reciben una probabilidad mínima para evitar `log2(0)`.
 
-El cliente transforma la suma en una puntuación porcentual usando referencias basadas en la entropía del modelo y la probabilidad mínima. **Ese valor no representa el porcentaje de caracteres correctamente descifrados.**
+El cliente transforma la suma en una puntuación porcentual usando referencias basadas en la entropía del modelo y la probabilidad mínima.
 
-## Requisitos
+> [!IMPORTANT]
+> La puntuación indica compatibilidad con el modelo. **No representa el porcentaje de caracteres correctamente descifrados.**
+
+<a id="requisitos"></a>
+
+## 🧰 Requisitos
 
 - Linux con sockets POSIX.
 - GCC compatible con C11.
@@ -81,7 +124,9 @@ El cliente transforma la suma en una puntuación porcentual usando referencias b
 - Biblioteca matemática estándar, enlazada con `-lm` al compilar el cliente.
 - Conectividad TCP al puerto **6767** si los clientes se ejecutan en otras máquinas.
 
-## Compilación
+<a id="compilación"></a>
+
+## 🔨 Compilación
 
 ```bash
 git clone https://github.com/western1258/criptoanalisis-estadistico.git
@@ -93,7 +138,9 @@ gcc -std=c11 -O3 Cliente.c -o cliente -lm
 
 `AnalisisFrec.c` y `TrigramaM.c` son módulos del servidor; no tienen un programa principal independiente.
 
-## Ejecución
+<a id="ejecución"></a>
+
+## 🚀 Ejecución
 
 Ejecuta los programas desde la raíz del repositorio para que las rutas relativas se resuelvan correctamente.
 
@@ -145,7 +192,8 @@ La sintaxis del cliente es:
 ./cliente [IP] [PUERTO] [ARCHIVO_CIFRADO]
 ```
 
-Si se omiten argumentos, usa `127.0.0.1`, puerto `67` y archivo `cifrado.txt`. Como el servidor escucha en `6767`, usa los argumentos explícitos de los ejemplos.
+> [!NOTE]
+> Si se omiten argumentos, el cliente usa `127.0.0.1`, puerto `67` y archivo `cifrado.txt`. El servidor escucha en **6767**: usa los argumentos explícitos de los ejemplos.
 
 ### 4. Comenzar la evaluación
 
@@ -153,7 +201,9 @@ Con los clientes conectados y el modelo recibido, presiona **Enter en la termina
 
 Para detener una prueba manualmente, usa **Ctrl+C**. El código actual no establece un límite de tiempo ni de iteraciones.
 
-## Protocolo de comunicación implementado
+<a id="protocolo-de-comunicación-implementado"></a>
+
+## 📡 Protocolo de comunicación implementado
 
 | Dirección | Contenido | Delimitación |
 |---|---|---|
@@ -164,7 +214,9 @@ Para detener una prueba manualmente, usa **Ctrl+C**. El código actual no establ
 
 No se implementan etiquetas de mensaje como `MODEL`, `BATCH` o `STOP`. El servidor usa `select()` para atender las respuestas de varios clientes.
 
-## Limitaciones actuales
+<a id="limitaciones-actuales"></a>
+
+## 📝 Limitaciones actuales
 
 - El cliente limita las puntuaciones a **99.99**, mientras que el servidor busca alcanzar **100**. Por ello, esa condición de éxito no se alcanza con el cliente actual; la búsqueda continúa mientras haya clientes activos y no ocurra un error.
 - La respuesta de clave y puntuación se lee con una sola llamada a `recv()` en el servidor. TCP puede fragmentarla y el servidor no reconstruye el mensaje completo antes de interpretarlo.
